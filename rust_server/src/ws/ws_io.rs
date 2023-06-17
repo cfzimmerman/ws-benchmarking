@@ -72,13 +72,9 @@ impl Io {
         addr: SocketAddr,
     ) -> Result<(), WsError> {
         let ws_stream = tokio_tungstenite::accept_async(stream).await?;
-
         let (sender, receiver) = unbounded();
-
         client_map.lock()?.insert(addr, sender);
-
         let (outbound, inbound) = ws_stream.split();
-
         let socket = Socket::new(&client_map, addr);
 
         let catch_inbound = inbound.try_for_each(|msg| {
@@ -106,7 +102,6 @@ impl Io {
         });
 
         let receive_from_others = receiver.map(Ok).forward(outbound);
-
         pin_mut!(catch_inbound, receive_from_others);
         future::select(catch_inbound, receive_from_others).await;
 

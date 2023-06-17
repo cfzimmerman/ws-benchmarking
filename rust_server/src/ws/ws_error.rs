@@ -7,6 +7,7 @@ pub enum WsError {
     MutexError(String),
     SerdeError(String),
     SendError(String),
+    FailedToSend(Vec<String>),
 }
 
 impl From<std::io::Error> for WsError {

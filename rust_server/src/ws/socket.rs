@@ -1,4 +1,5 @@
 use crate::ws::{ws_error::WsError, ws_io::ClientMap};
+use futures_channel::mpsc::TrySendError;
 use std::net::SocketAddr;
 use tokio_tungstenite::tungstenite::protocol::Message;
 
@@ -27,27 +28,41 @@ impl Socket<'_> {
     /// send: sends a message to everyone connected to the server matching the
     /// specified "To" scope.
     /// Prints to stderr if a message fails to send. May also return WsError.
+    /// If messages failed to send, returns a vector of clients who didn't receive
+    /// messages.
     pub fn send(&self, msg: Message, to: To) -> Result<(), WsError> {
         let clients = self.clients.lock()?;
+        let mut failed: Vec<String> = vec![];
+        let mut send_failed = |address: String, error: TrySendError<Message>| {
+            eprintln!("send error: {error}");
+            failed.push(address)
+        };
         match to {
-            To::Origin => clients
-                .get(&self.address)
-                .ok_or_else(|| WsError::ClientNotFound)?
-                .unbounded_send(msg)?,
+            To::Origin => {
+                let ws_out = clients
+                    .get(&self.address)
+                    .ok_or_else(|| WsError::ClientNotFound)?;
+                if let Err(err) = ws_out.unbounded_send(msg) {
+                    send_failed(self.address.to_string(), err)
+                }
+            }
             To::NonOrigin => clients
                 .iter()
                 .filter(|(&client_addr, _)| client_addr != self.address)
-                .for_each(|(_, ws_out)| {
+                .for_each(|(addr, ws_out)| {
                     if let Err(err) = ws_out.unbounded_send(msg.clone()) {
-                        eprintln!("send error: {err}");
+                        send_failed(addr.to_string(), err)
                     }
                 }),
-            To::All => clients.iter().for_each(|(_, ws_out)| {
+            To::All => clients.iter().for_each(|(addr, ws_out)| {
                 if let Err(err) = ws_out.unbounded_send(msg.clone()) {
-                    eprintln!("send error: {err}");
+                    send_failed(addr.to_string(), err)
                 }
             }),
         };
+        if failed.len() > 0 {
+            return Err(WsError::FailedToSend(failed));
+        }
         Ok(())
     }
 }

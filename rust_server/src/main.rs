@@ -15,8 +15,11 @@ async fn main() -> Result<(), WsError> {
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:5445".to_string());
 
-    let echo: EventAction =
-        Box::new(|socket, message| socket.send(Message::Text(message), To::All));
+    let echo: EventAction = Box::new(|socket, message| {
+        if let Err(error) = socket.send(Message::Text(message), To::All) {
+            eprintln!("event failed: {:?}", error)
+        };
+    });
 
     let event_list: Vec<Event> = vec![Event::new("echo", echo)];
 
