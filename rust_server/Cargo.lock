@@ -241,6 +241,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "my-ws"
+version = "0.1.0"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
 name = "num_cpus"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -360,6 +372,7 @@ version = "0.1.0"
 dependencies = [
  "futures-channel",
  "futures-util",
+ "my-ws",
  "serde",
  "serde_json",
  "tokio",

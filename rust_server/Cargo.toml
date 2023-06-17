@@ -10,3 +10,4 @@ futures-channel = "0.3.28"
 futures-util = "0.3.28"
 serde_json = "1.0.97"
 serde = { version = "1.0.164", features = ["derive"] }
+my-ws= { path = "../../my-ws" }

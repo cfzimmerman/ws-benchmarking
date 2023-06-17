@@ -1,4 +1,4 @@
-use rust_server::ws::{
+use my_ws::ws::{
     event::{Event, EventAction},
     socket::To,
     ws_error::WsError,
