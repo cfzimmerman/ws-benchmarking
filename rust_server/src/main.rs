@@ -1,5 +1,7 @@
-use rust_server::ws_io;
+use rust_server::ws_io::{Event, EventAction, Io, To};
+use std::boxed::Box;
 use std::env;
+use tokio_tungstenite::tungstenite::Message;
 
 // https://github.com/snapview/tokio-tungstenite/blob/master/examples/server.rs
 
@@ -9,7 +11,12 @@ async fn main() -> Result<(), std::io::Error> {
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:5445".to_string());
 
-    let io = ws_io::Io::build(&address).await?;
+    let echo: EventAction =
+        Box::new(|socket, message| socket.send(Message::Text(message), To::All));
+
+    let event_list: Vec<Event> = vec![Event::new("echo", echo)];
+
+    let io = Io::build(&address, event_list).await?;
     io.listen().await;
 
     Ok(())

@@ -22,14 +22,35 @@ pub mod ws_io {
         sync::{Arc, Mutex},
     };
 
-    use futures_channel::mpsc::{unbounded, TrySendError, UnboundedSender};
+    use serde::{Deserialize, Serialize};
+
+    use futures_channel::mpsc::{unbounded, UnboundedSender};
     use futures_util::{future, pin_mut, stream::TryStreamExt, StreamExt};
 
     use tokio::net::{TcpListener, TcpStream};
-    use tokio_tungstenite::tungstenite::protocol::Message;
+    pub use tokio_tungstenite::tungstenite::protocol::Message;
 
     type Tx = UnboundedSender<Message>;
     pub type ClientMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
+    pub type EventMap = Arc<Mutex<HashMap<&'static str, EventAction>>>;
+    pub type EventAction = Box<dyn Fn(&Socket, String) -> () + Send>;
+
+    pub struct Event {
+        path: &'static str,
+        action: EventAction,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub struct WsIoMsg {
+        path: String,
+        payload: String,
+    }
+
+    impl Event {
+        pub fn new(path: &'static str, action: EventAction) -> Event {
+            Event { path, action }
+        }
+    }
 
     pub struct Socket<'a> {
         address: SocketAddr,
@@ -61,27 +82,45 @@ pub mod ws_io {
     }
 
     pub struct Io {
-        pub listener: TcpListener,
-        pub clients: ClientMap,
+        listener: TcpListener,
+        clients: ClientMap,
+        events: EventMap,
     }
 
     impl Io {
-        pub async fn build(address: &str) -> Result<Io, std::io::Error> {
+        pub async fn build(address: &str, event_list: Vec<Event>) -> Result<Io, std::io::Error> {
             let listener = TcpListener::bind(&address).await?;
             println!("Listening on {}", address);
+
+            let mut event_map = HashMap::new();
+            for ev in event_list {
+                event_map.insert(ev.path, ev.action);
+            }
+
             Ok(Io {
                 listener,
                 clients: ClientMap::new(Mutex::new(HashMap::new())),
+                events: EventMap::new(Mutex::new(event_map)),
             })
         }
 
         pub async fn listen(&self) -> () {
             while let Ok((stream, addr)) = self.listener.accept().await {
-                tokio::spawn(Io::manage_connection(self.clients.clone(), stream, addr));
+                tokio::spawn(Io::manage_connection(
+                    self.clients.clone(),
+                    self.events.clone(),
+                    stream,
+                    addr,
+                ));
             }
         }
 
-        async fn manage_connection(client_map: ClientMap, stream: TcpStream, addr: SocketAddr) {
+        async fn manage_connection(
+            client_map: ClientMap,
+            event_map: EventMap,
+            stream: TcpStream,
+            addr: SocketAddr,
+        ) {
             let ws_stream = tokio_tungstenite::accept_async(stream)
                 .await
                 .expect("Error during WS handshake");
@@ -95,7 +134,13 @@ pub mod ws_io {
             let socket = Socket::new(&client_map, addr);
 
             let catch_inbound = inbound.try_for_each(|msg| {
-                socket.send(msg, To::All);
+                if let Message::Text(str_msg) = msg {
+                    let path_msg: WsIoMsg = serde_json::from_str(&str_msg).unwrap();
+                    let path: &str = &path_msg.path;
+                    let events = event_map.lock().unwrap();
+                    let handler = events.get(path).unwrap();
+                    (*handler)(&socket, path_msg.payload);
+                }
                 future::ok(())
             });
 
