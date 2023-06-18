@@ -24,13 +24,3 @@ async fn main() -> Result<(), WsError> {
 
     Ok(())
 }
-
-/*
-
-Next up:
-- Write a closure to handle the benchmark path
-    - Abstract stuff back into lib
-- Read back the hash
-- Send the hash back as a response
-
-*/
