@@ -1,14 +1,9 @@
-use my_ws::ws::{
-    event::{Event, EventAction},
-    socket::To,
-    ws_error::WsError,
-    ws_io::{Io, Message},
-};
+use my_ws::ws::{event::Event, ws_error::WsError, ws_io::Io};
 use rust_server::{
     benchmark::{Counters, Payload},
     redis_io::RedisConn,
 };
-use std::{boxed::Box, env};
+use std::env;
 // https://github.com/snapview/tokio-tungstenite/blob/master/examples/server.rs
 
 #[tokio::main]
@@ -28,13 +23,15 @@ async fn main() -> Result<(), WsError> {
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:5445".to_string());
 
+    /*
     let echo: EventAction = Box::new(|socket, message| {
         if let Err(error) = socket.send(Message::Text(message), To::All) {
             eprintln!("event failed: {:?}", error)
         };
     });
+    */
 
-    let event_list: Vec<Event> = vec![Event::new("echo", echo)];
+    let event_list: Vec<Event> = vec![];
 
     let io = Io::build(&address, event_list).await?;
     io.listen().await;
@@ -44,21 +41,9 @@ async fn main() -> Result<(), WsError> {
 
 /*
 
-To do:
-- Mount WS listeners
-
 Next up:
-- Configure routes
-    - path: string
-    - destination?
-    - method
-
-
-- Connect to Redis
-- Receive data, parse it:
-    count: number,
-    origin: string,
-- Update a hash in redis
+- Write a closure to handle the benchmark path
+    - Abstract stuff back into lib
 - Read back the hash
 - Send the hash back as a response
 
